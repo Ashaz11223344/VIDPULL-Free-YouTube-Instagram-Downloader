@@ -18,6 +18,39 @@ const STANDARD_HEADERS = [
   'Sec-Fetch-Mode: navigate',
 ];
 
+// Helper: Generate or locate Instagram Netscape cookies file for authenticated requests
+function getInstagramCookieFile() {
+  const localCookies = path.join(process.cwd(), 'cookies.txt');
+  if (fs.existsSync(localCookies)) return localCookies;
+
+  const cookieStr = process.env.INSTAGRAM_SESSION_ID || process.env.INSTAGRAM_COOKIE;
+  if (!cookieStr) return null;
+
+  try {
+    const cookiePath = path.join(os.tmpdir(), 'vidpull_ig_cookies.txt');
+    let content = '# Netscape HTTP Cookie File\n';
+
+    if (cookieStr.includes('\t')) {
+      content = cookieStr;
+    } else if (cookieStr.includes('=')) {
+      cookieStr.split(';').forEach(pair => {
+        const [k, v] = pair.trim().split('=');
+        if (k && v) {
+          content += `.instagram.com\tTRUE\t/\tTRUE\t2147483647\t${k.trim()}\t${v.trim()}\n`;
+        }
+      });
+    } else {
+      content += `.instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t${cookieStr.trim()}\n`;
+    }
+
+    fs.writeFileSync(cookiePath, content, 'utf-8');
+    return cookiePath;
+  } catch (err) {
+    console.warn('[Vidpull Engine] Failed to write Instagram cookie file:', err.message);
+    return null;
+  }
+}
+
 // In-memory cache for fetch requests to speed up redundant requests
 const fetchCache = new Map();
 const CACHE_TTL = 3600 * 1000; // 1 hour
@@ -256,7 +289,7 @@ app.post('/api/instagram/fetch', async (req, res) => {
 
     console.log(`[Vidpull Engine] Fetching Instagram metadata for: ${trimmed}`);
 
-    const info = await youtubedl(trimmed, {
+    const igFlags = {
       dumpSingleJson: true,
       noWarnings: true,
       preferFreeFormats: true,
@@ -266,7 +299,15 @@ app.post('/api/instagram/fetch', async (req, res) => {
         ...STANDARD_HEADERS,
         'Referer: https://www.instagram.com/',
       ],
-    });
+    };
+
+    const cookieFile = getInstagramCookieFile();
+    if (cookieFile) {
+      console.log(`[Vidpull Engine] Using Instagram cookies from: ${cookieFile}`);
+      igFlags.cookies = cookieFile;
+    }
+
+    const info = await youtubedl(trimmed, igFlags);
 
     const duration = Math.round(info.duration || 0);
     const durationFormatted = formatDuration(duration);
@@ -311,6 +352,12 @@ app.post('/api/instagram/fetch', async (req, res) => {
 
   } catch (error) {
     console.error('[Vidpull Engine] Instagram Fetch error:', error.message || error);
+    const msg = error.message || String(error);
+    if (msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('login') || msg.includes('checkpoint')) {
+      return res.status(429).json({
+        error: 'Instagram has blocked anonymous requests from this cloud server (HTTP 429). Add INSTAGRAM_SESSION_ID in your Render Environment Variables to enable Instagram downloads.',
+      });
+    }
     res.status(500).json({ error: error.message || 'Failed to fetch Instagram metadata' });
   }
 });
@@ -418,6 +465,13 @@ const handleDownload = async (req, res, platform) => {
         : STANDARD_HEADERS,
     };
 
+    if (platform === 'instagram') {
+      const cookieFile = getInstagramCookieFile();
+      if (cookieFile) {
+        ytdlOptions.cookies = cookieFile;
+      }
+    }
+
     if (startTime && endTime) {
       const cleanStart = sanitizeTimestamp(startTime, '00:00:00');
       const cleanEnd = sanitizeTimestamp(endTime, '00:05:00');
@@ -469,7 +523,12 @@ const handleDownload = async (req, res, platform) => {
     } catch {}
 
     if (!res.headersSent) {
-      res.status(500).json({ error: error.message || 'Download execution failed' });
+      const msg = error.message || String(error);
+      const is429 = msg.includes('429') || msg.includes('Too Many Requests');
+      const friendlyMsg = is429
+        ? 'Instagram blocked anonymous requests from this server (HTTP 429). Add INSTAGRAM_SESSION_ID in Render Environment Variables to enable downloads.'
+        : (error.message || 'Download execution failed');
+      res.status(is429 ? 429 : 500).json({ error: friendlyMsg });
     }
   }
 };
