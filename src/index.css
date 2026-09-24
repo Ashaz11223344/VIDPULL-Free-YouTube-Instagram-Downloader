@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: #000000;
+  }
+  body {
+    background-color: #FFFDF5;
+    color: #000000;
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 900;
+    letter-spacing: -0.03em;
+  }
+}
+
+/* Neo-Brutalist Utility Classes */
+.bg-halftone {
+  background-image: radial-gradient(#000000 1.5px, transparent 1.5px);
+  background-size: 20px 20px;
+}
+
+.bg-halftone-dense {
+  background-image: radial-gradient(#000000 2px, transparent 2px);
+  background-size: 14px 14px;
+}
+
+.bg-grid {
+  background-size: 32px 32px;
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0.1) 1.5px, transparent 1.5px),
+                    linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 1.5px, transparent 1.5px);
+}
+
+.bg-stripes-yellow {
+  background: repeating-linear-gradient(
+    -45deg,
+    #FFD93D,
+    #FFD93D 15px,
+    #000000 15px,
+    #000000 30px
+  );
+}
+
+.bg-stripes-pattern {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 0, 0, 0.15),
+    rgba(0, 0, 0, 0.15) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+}
+
+.text-stroke-black {
+  -webkit-text-stroke: 2px #000000;
+  color: transparent;
+}
+
+.text-stroke-thick {
+  -webkit-text-stroke: 3px #000000;
+  color: transparent;
+}
+
+.text-stroke-white {
+  -webkit-text-stroke: 2px #FFFFFF;
+  color: transparent;
+}
+
+/* Mechanical Button Press */
+.neo-btn {
+  transition: transform 100ms ease-out, box-shadow 100ms ease-out;
+  user-select: none;
+}
+
+.neo-btn:active:not(:disabled) {
+  transform: translate(4px, 4px) !important;
+  box-shadow: 0px 0px 0px 0px #000000 !important;
+}
+
+/* Card Hover Physics */
+.neo-card {
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+.neo-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 14px 14px 0px 0px #000000;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FFFDF5;
+  border-left: 3px solid #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #FFD93D;
+  border: 3px solid #000000;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #FF6B6B;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin-slow, .animate-bounce, .animate-pulse, .animate-marquee {
+    animation: none !important;
+  }
+}
