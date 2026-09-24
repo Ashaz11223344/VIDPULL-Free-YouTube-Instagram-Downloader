@@ -49,7 +49,29 @@ function getInstagramCookieFile() {
     console.warn('[Vidpull Engine] Failed to write Instagram cookie file:', err.message);
     return null;
   }
+// Helper: Locate YouTube cookies if provided (for strict bot-block environments)
+function getYouTubeCookieFile() {
+  const localCookies = path.join(process.cwd(), 'cookies.txt');
+  if (fs.existsSync(localCookies)) return localCookies;
+
+  const cookieStr = process.env.YOUTUBE_COOKIE || process.env.COOKIES_TEXT;
+  if (!cookieStr) return null;
+
+  try {
+    const cookiePath = path.join(os.tmpdir(), 'vidpull_yt_cookies.txt');
+    fs.writeFileSync(cookiePath, cookieStr, 'utf-8');
+    return cookiePath;
+  } catch {
+    return null;
+  }
 }
+
+// Background startup check for latest yt-dlp binary
+try {
+  youtubedl('-U').then((res) => {
+    console.log('[Vidpull Engine] yt-dlp engine status:', typeof res === 'string' ? res.trim() : 'Up to date');
+  }).catch(() => {});
+} catch {}
 
 // In-memory cache for fetch requests to speed up redundant requests
 const fetchCache = new Map();
@@ -122,6 +144,11 @@ app.post('/api/youtube/fetch', async (req, res) => {
       userAgent: BROWSER_USER_AGENT,
       addHeader: STANDARD_HEADERS,
     };
+
+    const ytCookie = getYouTubeCookieFile();
+    if (ytCookie) {
+      ytdlFlags.cookies = ytCookie;
+    }
 
     if (isPlaylistUrl) {
       ytdlFlags.flatPlaylist = true;
@@ -469,6 +496,13 @@ const handleDownload = async (req, res, platform) => {
       const cookieFile = getInstagramCookieFile();
       if (cookieFile) {
         ytdlOptions.cookies = cookieFile;
+      }
+    }
+
+    if (platform === 'youtube') {
+      const ytCookie = getYouTubeCookieFile();
+      if (ytCookie) {
+        ytdlOptions.cookies = ytCookie;
       }
     }
 
