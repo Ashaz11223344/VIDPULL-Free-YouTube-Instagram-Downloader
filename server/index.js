@@ -11,6 +11,13 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// Standard desktop browser emulation headers to prevent 429 rate limits & bot blocks
+const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+const STANDARD_HEADERS = [
+  'Accept-Language: en-US,en;q=0.9',
+  'Sec-Fetch-Mode: navigate',
+];
+
 // In-memory cache for fetch requests to speed up redundant requests
 const fetchCache = new Map();
 const CACHE_TTL = 3600 * 1000; // 1 hour
@@ -79,7 +86,8 @@ app.post('/api/youtube/fetch', async (req, res) => {
       noWarnings: true,
       preferFreeFormats: true,
       noCheckCertificates: true,
-      extractorArgs: 'youtube:player_client=android'
+      userAgent: BROWSER_USER_AGENT,
+      addHeader: STANDARD_HEADERS,
     };
 
     if (isPlaylistUrl) {
@@ -88,8 +96,17 @@ app.post('/api/youtube/fetch', async (req, res) => {
       ytdlFlags.noPlaylist = true;
     }
 
-    // Call youtube-dl-exec with aggressive optimizations for YouTube
-    const info = await youtubedl(trimmed, ytdlFlags);
+    // Call youtube-dl-exec with resilient multi-client fallback
+    let info;
+    try {
+      info = await youtubedl(trimmed, ytdlFlags);
+    } catch (primaryErr) {
+      console.warn(`[Vidpull Engine] Primary extraction failed, attempting iOS/Web client fallback:`, primaryErr.message || primaryErr);
+      info = await youtubedl(trimmed, {
+        ...ytdlFlags,
+        extractorArgs: 'youtube:player_client=ios,web,mweb',
+      });
+    }
 
     const isPlaylist = info._type === 'playlist' || (info.entries && info.entries.length > 0);
     const duration = Math.round(info.duration || 0);
@@ -244,6 +261,11 @@ app.post('/api/instagram/fetch', async (req, res) => {
       noWarnings: true,
       preferFreeFormats: true,
       noCheckCertificates: true,
+      userAgent: BROWSER_USER_AGENT,
+      addHeader: [
+        ...STANDARD_HEADERS,
+        'Referer: https://www.instagram.com/',
+      ],
     });
 
     const duration = Math.round(info.duration || 0);
@@ -341,6 +363,8 @@ const handleDownload = async (req, res, platform) => {
         output: outputTemplate,
         noWarnings: true,
         noCheckCertificates: true,
+        userAgent: BROWSER_USER_AGENT,
+        addHeader: STANDARD_HEADERS,
       });
 
       const files = fs.readdirSync(tempDir);
@@ -388,11 +412,11 @@ const handleDownload = async (req, res, platform) => {
       output: outputTemplate,
       noWarnings: true,
       noCheckCertificates: true,
+      userAgent: BROWSER_USER_AGENT,
+      addHeader: platform === 'instagram'
+        ? [...STANDARD_HEADERS, 'Referer: https://www.instagram.com/']
+        : STANDARD_HEADERS,
     };
-
-    if (platform === 'youtube') {
-       ytdlOptions.extractorArgs = 'youtube:player_client=android';
-    }
 
     if (startTime && endTime) {
       const cleanStart = sanitizeTimestamp(startTime, '00:00:00');
